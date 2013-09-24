@@ -9,7 +9,9 @@ __all__ = ["client", "userStore",  "user", "noteStore", "all_notebooks", "notes_
 
 from time import sleep
 
+# settings is an external module used to hold authToken
 import settings
+
 from evernote.api.client import EvernoteClient
 
 from evernote.edam.notestore.ttypes import (NoteFilter,
