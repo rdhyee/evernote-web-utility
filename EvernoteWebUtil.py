@@ -1,9 +1,12 @@
 """
-Wrapper for the Evernote Python SDK
+Wrapper for the Evernote Python SDK 
 """
 
 __all__ = ["client", "userStore",  "user", "noteStore", "all_notebooks", "notes_metadata", "sizes_of_notes",
            "all_tags", "tag", "tag_counts_by_name", "tags_by_guid"]
+
+import logging
+logger = logging.getLogger(__name__)
 
 # https://github.com/evernote/evernote-sdk-python/blob/master/sample/client/EDAMTest.py
 
@@ -14,8 +17,10 @@ import settings
 
 from evernote.api.client import EvernoteClient
 
+from evernote.edam.type.ttypes import Note
+
 from evernote.edam.notestore.ttypes import (NoteFilter,
-                                            NotesMetadataResultSpec,
+                                            NotesMetadataResultSpec
                                            )
 
 from evernote.edam.error.ttypes import (EDAMSystemException, EDAMErrorCode)
@@ -38,7 +43,9 @@ def evernote_wait_try_again(f):
             return f(*args, **kwargs)
         except EDAMSystemException, e:
             if e.errorCode == EDAMErrorCode.RATE_LIMIT_REACHED:
+                logger.info( "rate limit: {0} s. wait".format(e.rateLimitDuration))
                 sleep(e.rateLimitDuration)
+                logger("wait over")
                 return f(*args, **kwargs)
     
     return f2
@@ -71,7 +78,7 @@ _tag_counts = None
 _tags_by_name = None
 _tags_by_guid = None
 _tag_counts_by_name = None
-
+    
 
 def all_notebooks(refresh=False):
     # List all of the notebooks in the user's account
@@ -138,15 +145,17 @@ def tag_counts_by_name(refresh=False):
         tags = all_tags(refresh)
         
     return _tag_counts_by_name
-        
-        
+            
 def tags_by_guid(refresh=False):
     
     if _tags is None or refresh:
         tags = all_tags(refresh)
         
     return _tags_by_guid
-        
+ 
+_when_tags = [t for t in all_tags() if t.parentGuid == tag(name=".When").guid]
+_when_tags_guids = set([t.guid for t in _when_tags])
+       
 
 def display_notebooks():
     notebooks = all_notebooks()
@@ -229,3 +238,105 @@ def notes(title=None):
                           includeUpdated=True,
                           includeUpdateSequenceNum=True,
                           words='intitle:"{0}"'.format(title))
+
+def get_note(guid, 
+            withContent=False,
+            withResourcesData=False,
+            withResourcesRecognition=False,
+            withResourcesAlternateData=False):
+    
+    return noteStore.getNote(guid, withContent, withResourcesData, 
+                                 withResourcesRecognition, withResourcesAlternateData)
+    
+
+def create_note(title, content, tagNames=None, notebookGuid=None):
+
+    # put the note into the :INBOX notebook by default
+    inbox_nb_guid = notebook(name=':INBOX').guid
+
+    note_template = """<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+    <!DOCTYPE en-note SYSTEM "http://xml.evernote.com/pub/enml2.dtd">
+    <en-note style="word-wrap: break-word; -webkit-nbsp-mode: space; -webkit-line-break: after-white-space;">
+    {0}
+    </en-note>"""
+    
+    note = Note()
+    
+    note.title = title
+    note.content = note_template.format(content)
+    if tagNames is None:
+        note.tagNames = []
+    else:
+        note.tagNames = tagNames
+
+    if notebookGuid is None:
+        note.notebookGuid = inbox_nb_guid
+    else:
+        note.notebookGuid = notebookGuid
+        
+    note = noteStore.createNote(note)
+    return note
+
+def set_notebook_for_note(note, notebook_name):
+    """
+    Place the given note in the notebook of name notebook_name
+    """
+    new_nb_guid = notebook(name=notebook_name).guid
+    if note.notebookGuid != new_nb_guid:
+        note.notebookGuid = new_nb_guid
+        noteStore.updateNote(note)
+    return note
+        
+
+def web_api_notes_from_selection():
+    from appscript import app
+    evnote = app('Evernote')
+    return [get_note(sel_note.note_link().split("/")[-3]) for sel_note in evnote.selection()]
+
+
+def actions_for_project(tag_name,
+                        includeTitle=True, 
+                        includeUpdated=True,
+                        includeUpdateSequenceNum=True,
+                        includeTagGuids=True ):
+    
+    notes = notes_metadata(includeTitle=includeTitle, 
+                                  includeUpdated=includeUpdated,
+                                  includeUpdateSequenceNum=includeUpdateSequenceNum,
+                                  includeTagGuids=includeTagGuids,
+                                  tagGuids = [tag(tag_name).guid],
+                                  notebookGuid=notebook(name='Action Pending').guid)
+    return notes
+
+def strip_when_tags(note):
+    """
+    remove any tagGuids that are when tags from note
+    """
+    guids_new_tag_set = set(note.tagGuids) - _when_tags_guids
+    note.tagGuids = list(guids_new_tag_set)
+    noteStore.updateNote(note)
+    return note
+
+def strip_when_tags_move_to_ref_nb_for_selection():
+    
+    from appscript import app
+    evnote = app('Evernote')
+    
+    notes = web_api_notes_from_selection()
+    notes = [strip_when_tags(note) for note in notes]
+
+    # move note to the :REFERENCE Notebook
+    notes = [set_notebook_for_note(note, ":REFERENCE") for note in notes]
+
+    evnote.synchronize()
+    
+
+def project_tags_for_selected():
+    
+    project_tags = set()
+    
+    for note in web_api_notes_from_selection():
+        project_tags |= set(filter(lambda s: s.startswith("+"), [tag(guid=g).name for g in note.tagGuids]))
+        
+    return project_tags
+        
