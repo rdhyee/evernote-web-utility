@@ -135,7 +135,8 @@ note_template = """<?xml version="1.0" encoding="UTF-8" standalone="no"?>
 
 for tag_name in (all_plus_tags - project_plus_tags):
     proj_name = tag_name[1:]
-    note = ewu.create_note(proj_name, " ", tagNames=[tag_name], notebook_guid=projects_nb_guid)
+    note = ewu.create_note(proj_name, " ", tagNames=[tag_name], 
+                           notebookGuid=projects_nb_guid)
 
 
 # <markdowncell>
@@ -157,6 +158,7 @@ for tag_name in (all_plus_tags - project_plus_tags):
 # <codecell>
 
 # make sure that + tags have the right parent (.Active Projects)
+# THIS IS USEFUL
 
 active_projects_tag = ewu.tag(name=".Active Projects")
 inactive_projects_tag = ewu.tag(name=".Inactive Projects")
