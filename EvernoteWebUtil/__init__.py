@@ -12,24 +12,45 @@ logger = logging.getLogger(__name__)
 
 from time import sleep
 
-# settings is an external module used to hold authToken
-import settings
-
 from evernote.api.client import EvernoteClient
-
 from evernote.edam.type.ttypes import Note
-
 from evernote.edam.notestore.ttypes import (NoteFilter,
                                             NotesMetadataResultSpec
                                            )
-
 from evernote.edam.error.ttypes import (EDAMSystemException, EDAMErrorCode)
 
-dev_token = settings.authToken
 
+def init(auth_token, sandbox=False):
+    """
+    
+    """
+    global _client, client, userStore, noteStore, user
+    global _notebooks, _notebook_name_dict, _notebook_guid_dict
+    global _tags, _tag_counts, _tags_by_name, _tags_by_guid, _tag_counts_by_name
+    global _when_tags, _when_tags_guids
+    
+    _client = EvernoteClient(token=auth_token, sandbox=sandbox)
+    client = RateLimitingEvernoteProxy(_client)
 
-_client = EvernoteClient(token=dev_token, sandbox=False)
+    userStore = client.get_user_store()
+    noteStore = client.get_note_store()
+    
+    user = userStore.getUser()
+    
+    _notebooks = None
+    _notebook_name_dict = None
+    _notebook_guid_dict = None
+    
+    _tags = None
+    _tag_counts = None
+    _tags_by_name = None
+    _tags_by_guid = None
+    _tag_counts_by_name = None
+    
+    _when_tags = [t for t in all_tags() if t.parentGuid == tag(name=".When").guid]
+    _when_tags_guids = set([t.guid for t in _when_tags])
 
+    
 # first efforts at implementing strategy for handling rate limiting
 # http://dev.evernote.com/doc/articles/rate_limits.php
 
@@ -60,25 +81,6 @@ class RateLimitingEvernoteProxy(object):
     def __getattribute__(self, name):
         return evernote_wait_try_again(getattr(object.__getattribute__(self, "_obj"), name))
 
-
-client = RateLimitingEvernoteProxy(_client)
-
-
-userStore = client.get_user_store()
-noteStore = client.get_note_store()
-
-user = userStore.getUser()
-
-_notebooks = None
-_notebook_name_dict = None
-_notebook_guid_dict = None
-
-_tags = None
-_tag_counts = None
-_tags_by_name = None
-_tags_by_guid = None
-_tag_counts_by_name = None
-    
 
 def all_notebooks(refresh=False):
     # List all of the notebooks in the user's account
@@ -153,8 +155,7 @@ def tags_by_guid(refresh=False):
         
     return _tags_by_guid
  
-_when_tags = [t for t in all_tags() if t.parentGuid == tag(name=".When").guid]
-_when_tags_guids = set([t.guid for t in _when_tags])
+
        
 
 def display_notebooks():
