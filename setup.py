@@ -9,6 +9,6 @@ except ImportError:
 
 
 setup(name='EvernoteWebUtil',
-      version='0.0.3',
+      version='0.0.4',
       packages=['EvernoteWebUtil'],
       )

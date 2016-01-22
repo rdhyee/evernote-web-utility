@@ -261,8 +261,8 @@ def create_note(title, content, tagNames=None, notebookGuid=None):
 
     note = Note()
 
-    note.title = title
-    note.content = note_template.format(content)
+    note.title = title.encode('utf-8')
+    note.content = note_template.format(content).encode('utf-8')
     if tagNames is None:
         note.tagNames = []
     else:
