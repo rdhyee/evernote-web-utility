@@ -51,12 +51,10 @@ def init(auth_token, sandbox=False):
     _when_tags_guids = set([t.guid for t in _when_tags])
 
 
-# first efforts at implementing strategy for handling rate limiting
-# http://dev.evernote.com/doc/articles/rate_limits.php
-
 def evernote_wait_try_again(f):
     """
     Wait until mandated wait and try again
+    http://dev.evernote.com/doc/articles/rate_limits.php
     """
 
     def f2(*args, **kwargs):
@@ -71,7 +69,6 @@ def evernote_wait_try_again(f):
 
     return f2
 
-
 class RateLimitingEvernoteProxy(object):
     # based on http://code.activestate.com/recipes/496741-object-proxying/
     __slots__ = ["_obj"]
@@ -80,7 +77,6 @@ class RateLimitingEvernoteProxy(object):
 
     def __getattribute__(self, name):
         return evernote_wait_try_again(getattr(object.__getattribute__(self, "_obj"), name))
-
 
 def all_notebooks(refresh=False):
     # List all of the notebooks in the user's account
@@ -247,7 +243,6 @@ def get_note(guid,
     return noteStore.getNote(guid, withContent, withResourcesData,
                                  withResourcesRecognition, withResourcesAlternateData)
 
-
 def create_note(title, content, tagNames=None, notebookGuid=None):
 
     # put the note into the :INBOX notebook by default
@@ -276,6 +271,37 @@ def create_note(title, content, tagNames=None, notebookGuid=None):
     note = noteStore.createNote(note)
     return note
 
+def update_note(note, title=None, content=None, tagNames=None, notebookGuid=None):
+    
+    """
+    With the exception of the note's title and guid, fields that are not being changed 
+    do not need to be set. If the content is not being modified, note.content should be 
+    left unset. If the list of resources is not being modified, note.resources 
+    should be left unset.
+    """
+
+    note_template = u"""<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+    <!DOCTYPE en-note SYSTEM "http://xml.evernote.com/pub/enml2.dtd">
+    <en-note style="word-wrap: break-word; -webkit-nbsp-mode: space; -webkit-line-break: after-white-space;">
+    {0}
+    </en-note>"""
+
+    if title is not None:
+        note.title = title.encode('utf-8')
+    
+    if content is not None:
+        note.content = note_template.format(content).encode('utf-8')
+        
+    if tagNames is not None:
+        note.tagNames = tagNames
+
+    if notebookGuid is not None:
+        note.notebookGuid = notebookGuid
+
+    note = noteStore.updateNote(note)
+    return note
+
+
 def set_notebook_for_note(note, notebook_name):
     """
     Place the given note in the notebook of name notebook_name
@@ -286,12 +312,10 @@ def set_notebook_for_note(note, notebook_name):
         noteStore.updateNote(note)
     return note
 
-
 def web_api_notes_from_selection():
     from appscript import app
     evnote = app('Evernote')
     return [get_note(sel_note.note_link().split("/")[-3]) for sel_note in evnote.selection()]
-
 
 def actions_for_project(tag_name,
                         includeTitle=True,
@@ -328,7 +352,6 @@ def strip_when_tags_move_to_ref_nb_for_selection():
     notes = [set_notebook_for_note(note, ":REFERENCE") for note in notes]
 
     evnote.synchronize()
-
 
 def project_tags_for_selected():
 
