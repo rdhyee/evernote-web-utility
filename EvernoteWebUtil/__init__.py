@@ -11,6 +11,7 @@ logger = logging.getLogger(__name__)
 # https://github.com/evernote/evernote-sdk-python/blob/master/sample/client/EDAMTest.py
 
 from time import sleep
+import arrow
 
 from evernote.api.client import EvernoteClient
 from evernote.edam.type.ttypes import Note
@@ -271,7 +272,8 @@ def create_note(title, content, tagNames=None, notebookGuid=None):
     note = noteStore.createNote(note)
     return note
 
-def update_note(note, title=None, content=None, tagNames=None, notebookGuid=None):
+def update_note(note, title=None, content=None, tagNames=None, notebookGuid=None,
+                    updated=None):
     
     """
     With the exception of the note's title and guid, fields that are not being changed 
@@ -297,6 +299,9 @@ def update_note(note, title=None, content=None, tagNames=None, notebookGuid=None
 
     if notebookGuid is not None:
         note.notebookGuid = notebookGuid
+        
+    if updated is None:
+        note.updated = arrow.utcnow().timestamp*1000
 
     note = noteStore.updateNote(note)
     return note
