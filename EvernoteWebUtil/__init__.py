@@ -3,13 +3,18 @@ Wrapper for the Evernote Python SDK
 """
 
 __all__ = ["client", "userStore",  "user", "noteStore", "all_notebooks", "notes_metadata", "sizes_of_notes",
-           "all_tags", "tag", "tag_counts_by_name", "tags_by_guid", "init"]
+           "all_tags", "tag", "tag_counts_by_name", "tags_by_guid", "init", "project_notes_and_tags",
+           "projects_to_df", "all_actions", "actions_to_df", "non_project_plus_tags",
+           'fix_wayward_plus_tags', 'action_note_tags', 'retire_project']
+
+from itertools import islice
 
 import logging
 logger = logging.getLogger(__name__)
 
 # https://github.com/evernote/evernote-sdk-python/blob/master/sample/client/EDAMTest.py
 
+import datetime
 from time import sleep
 import arrow
 
@@ -19,6 +24,10 @@ from evernote.edam.notestore.ttypes import (NoteFilter,
                                             NotesMetadataResultSpec
                                            )
 from evernote.edam.error.ttypes import (EDAMSystemException, EDAMErrorCode)
+
+from pandas import DataFrame
+from collections import defaultdict
+
 
 
 def init(auth_token, sandbox=False):
@@ -244,6 +253,7 @@ def get_note(guid,
     return noteStore.getNote(guid, withContent, withResourcesData,
                                  withResourcesRecognition, withResourcesAlternateData)
 
+
 def create_note(title, content, tagNames=None, notebookGuid=None):
 
     # put the note into the :INBOX notebook by default
@@ -271,6 +281,7 @@ def create_note(title, content, tagNames=None, notebookGuid=None):
 
     note = noteStore.createNote(note)
     return note
+
 
 def update_note(note, title=None, content=None, tagNames=None, notebookGuid=None,
                     updated=None):
@@ -322,6 +333,46 @@ def web_api_notes_from_selection():
     evnote = app('Evernote')
     return [get_note(sel_note.note_link().split("/")[-3]) for sel_note in evnote.selection()]
 
+def all_actions():
+    actions = list(islice(notes_metadata(includeTitle=True,
+                                  includeUpdated=True,
+                                  includeCreated=True,
+                                  includeUpdateSequenceNum=True,
+                                  includeTagGuids=True,
+                                  notebookGuid=notebook(name='Action Pending').guid), None))
+    return actions
+
+def actions_to_df(actions):
+
+    def j_(items):
+        return ",".join(items)
+
+    actions_data = []
+
+    for note in actions:
+        tags = [tag(guid=tagGuid).name for tagGuid in note.tagGuids] if note.tagGuids is not None else []
+        plus_tags = [tag_ for tag_ in tags if tag_.startswith("+")]
+        context_tags = [tag_ for tag_ in tags if tag_.startswith("@")]
+        when_tags = [tag_ for tag_ in tags if tag_.startswith("#")]
+        other_tags = [tag_ for tag_ in tags if tag_[0] not in ['+', '@', '#']]
+
+
+        actions_data.append(dict([('title',note.title),
+                                ('guid',note.guid),
+                                ('created', datetime.datetime.fromtimestamp(note.created/1000.)),
+                                ('updated', datetime.datetime.fromtimestamp(note.updated/1000.)),
+                                ('plus', j_(plus_tags)),
+                                ('context', j_(context_tags)),
+                                ('when', j_(when_tags)),
+                                ('other', j_(other_tags))
+                                ])
+        )
+
+    actions_df = DataFrame(actions_data,
+                  columns=['title','guid','created','updated','plus', 'context', 'when', 'other'])
+
+    return actions_df
+
 def actions_for_project(tag_name,
                         includeTitle=True,
                         includeUpdated=True,
@@ -358,6 +409,40 @@ def strip_when_tags_move_to_ref_nb_for_selection():
 
     evnote.synchronize()
 
+def projects_to_df(notes):
+
+    df = DataFrame([dict([('title',note.title),
+                            ('guid',note.guid),
+                            ('created', datetime.datetime.fromtimestamp(note.created/1000.)),
+                            ('updated', datetime.datetime.fromtimestamp(note.updated/1000.))
+                            ]) for note in notes],
+              columns=['title','guid','created','updated'])
+
+    return df
+
+def project_notes_and_tags():
+    """
+    get all the notes in the :PROJECTS Notebook
+    """
+
+    notes = list(islice(notes_metadata(includeTitle=True,
+                                  includeUpdated=True,
+                                  includeCreated=True,
+                                  includeUpdateSequenceNum=True,
+                                  includeTagGuids=True,
+                                  notebookGuid=notebook(name=':PROJECTS').guid), None))
+
+    # accumulate all the tags that begin with "+" associated with notes in :PROJECTS notebook
+    plus_tags_set = set()
+
+    for note in notes:
+        tags = [tag(guid=tagGuid).name for tagGuid in note.tagGuids] if note.tagGuids is not None else []
+        plus_tags = [tag_ for tag_ in tags if tag_.startswith("+")]
+
+        plus_tags_set.update(plus_tags)
+
+    return (notes, plus_tags_set)
+
 def project_tags_for_selected():
 
     project_tags = set()
@@ -366,3 +451,146 @@ def project_tags_for_selected():
         project_tags |= set(filter(lambda s: s.startswith("+"), [tag(guid=g).name for g in note.tagGuids]))
 
     return project_tags
+
+def non_project_plus_tags():
+
+    all_plus_tags = set(filter(lambda tag_: tag_.startswith("+"),
+                       [tag_.name for tag_ in all_tags(refresh=False)]))
+
+    projects_notes = list(islice(notes_metadata(includeTitle=True,
+                                  includeUpdated=True,
+                                  includeUpdateSequenceNum=True,
+                                  notebookGuid=notebook(name=':PROJECTS').guid), None))
+
+    project_plus_tags = set()
+    for note in projects_notes:
+        tags = noteStore.getNoteTagNames(note.guid)
+        plus_tags = [tag_ for tag_ in tags if tag_.startswith("+")]
+        project_plus_tags.update(plus_tags)
+
+
+    return (all_plus_tags - project_plus_tags)
+
+def generate_project_starter_notes():
+
+    projects_nb_guid = notebook(name=':PROJECTS').guid
+
+    notes = []
+
+    for tag_name in non_project_plus_tags():
+        proj_name = tag_name[1:]
+        note = create_note(proj_name, " ", tagNames=[tag_name],
+                               notebookGuid=projects_nb_guid)
+        notes.append(note)
+
+    return notes
+
+def fix_wayward_plus_tags():
+
+    active_projects_tag = tag(name=".Active Projects")
+    inactive_projects_tag = tag(name=".Inactive Projects")
+
+    wayward_plus_tags = [tag_ for tag_ in all_tags(refresh=True) if tag_.name.startswith("+") and tag_.parentGuid != active_projects_tag.guid]
+    for tag_ in wayward_plus_tags:
+        tag_.parentGuid = active_projects_tag.guid
+        noteStore.updateTag(tag_)
+
+    return [tag_.name for tag_ in wayward_plus_tags]
+
+def action_note_tags():
+
+    when_tags = [tag_ for tag_ in all_tags(refresh=True) if tag_.parentGuid == tag(name=".When").guid]
+    when_tags_guids = set([tag_.guid for tag_ in when_tags])
+
+    note_tags_dict = defaultdict(list)
+
+    action_notes = list(islice(notes_metadata(includeTitle=True,
+                                      includeUpdated=True,
+                                      includeUpdateSequenceNum=True,
+                                      includeTagGuids=True,
+                                      notebookGuid=notebook(name='Action Pending').guid), None))
+
+    # tags that have no .When tags whatsover
+    # ideally -- each action has one and only one .When tag
+
+    for note in action_notes:
+        tag_guids = note.tagGuids
+
+        if tag_guids is None:
+            tag_guids = []
+
+        tag_names = [tag(guid=g).name for g in tag_guids]
+        for tag_name in tag_names:
+            note_tags_dict[tag_name].append(note)
+
+        if len(tag_guids) == 0:
+            note_tags_dict['__UNTAGGED__'].append(note)
+
+
+    return note_tags_dict
+
+def retire_project(tag_name,
+    ignore_actions=False,
+    dry_run=False,
+    display_remaining_actions=True):
+    """
+    Retire the project represented by tag_name
+    """
+    tag_ = tag(name=tag_name)
+
+    # make sure tag_name starts with "+"
+    if not tag_name.startswith("+"):
+        return tag_
+
+    # if ignore_actions is False, check whether are still associated actions for the project.
+    # if there are actions, then don't retire project.  Optionally display actions in Evernote
+    if not ignore_actions:
+        associated_actions = list(actions_for_project(tag_name))
+        if len(associated_actions):
+            if display_remaining_actions:
+                from appscript import app
+                evnote = app('Evernote')
+                evnote.open_collection_window(with_query_string = '''notebook:"Action Pending" tag:"{0}"'''.format(tag_name))
+
+            return tag_name
+
+
+    # before just trying to turn the + to a -, check for existence of the new name.
+    # if the new name exists, we would delete the + tag and apply the - tag to the notes tied to the
+    # + tag
+
+    # let's take care of the simple case first
+
+    # do I have logic for finding all notes that have a given tag?
+    # tagging a set of notes with a given tag?
+
+    retired_tag_name = "-" + tag_name[1:]
+
+    if tag(retired_tag_name) is None:
+        tag_.name = retired_tag_name
+    else:
+        raise Exception("{0} already exists".format(retired_tag_name))
+
+    # change parent reference
+    tag_.parentGuid = tag('.Inactive Projects').guid
+
+    # move the project note (if it exists) from the project notebook to the retired project notebook
+
+    project_notes = notes_metadata(includeTitle=True, includeNotebookGuid=True,
+                            tagGuids = [tag_.guid],
+                            notebookGuid=notebook(name=':PROJECTS').guid)
+
+    # with NoteMetadata, how to make change to the corresponding note?
+    # make use of
+    # http://dev.evernote.com/doc/reference/NoteStore.html#Fn_NoteStore_updateNote
+
+    for note in project_notes:
+        note.notebookGuid = notebook(name=":PROJECTS--RETIRED").guid
+        noteStore.updateNote(note)
+
+    # deal with the associated actions for the project
+
+    # apply changes to tag
+    noteStore.updateTag(tag_)
+
+    return tag_
