@@ -2,6 +2,11 @@
 Wrapper for the Evernote Python SDK
 """
 
+from __future__ import print_function
+from __future__ import division
+
+from past.utils import old_div
+from builtins import object
 __all__ = ["client", "userStore",  "user", "noteStore", "all_notebooks", "notes_metadata", "sizes_of_notes",
            "all_tags", "tag", "tag_counts_by_name", "tags_by_guid", "init", "project_notes_and_tags",
            "projects_to_df", "all_actions", "actions_to_df", "non_project_plus_tags",
@@ -70,12 +75,15 @@ def evernote_wait_try_again(f):
     def f2(*args, **kwargs):
         try:
             return f(*args, **kwargs)
-        except EDAMSystemException, e:
+        except EDAMSystemException as e:
             if e.errorCode == EDAMErrorCode.RATE_LIMIT_REACHED:
                 logger.info( "rate limit: {0} s. wait".format(e.rateLimitDuration))
                 sleep(e.rateLimitDuration)
                 logger("wait over")
                 return f(*args, **kwargs)
+            else:
+                print(e)
+                raise e
 
     return f2
 
@@ -124,7 +132,7 @@ def all_tags(refresh=False):
         _tags_by_name = dict([(tag.name, tag) for tag in _tags])
         _tags_by_guid = dict([(tag.guid, tag) for tag in _tags])
 
-        _tag_counts_by_name = dict([(_tags_by_guid[guid].name, count) for (guid, count) in _tag_counts.tagCounts.items()])
+        _tag_counts_by_name = dict([(_tags_by_guid[guid].name, count) for (guid, count) in list(_tag_counts.tagCounts.items())])
 
     return _tags
 
@@ -164,7 +172,7 @@ def tags_by_guid(refresh=False):
 def display_notebooks():
     notebooks = all_notebooks()
     for (i, notebook) in enumerate(notebooks):
-        print i, notebook.name, notebook.guid
+        print(i, notebook.name, notebook.guid)
 
 def notebookcounts():
     """ return a dict of notebook guid -> number of notes in notebook"""
@@ -359,8 +367,8 @@ def actions_to_df(actions):
 
         actions_data.append(dict([('title',note.title),
                                 ('guid',note.guid),
-                                ('created', datetime.datetime.fromtimestamp(note.created/1000.)),
-                                ('updated', datetime.datetime.fromtimestamp(note.updated/1000.)),
+                                ('created', datetime.datetime.fromtimestamp(old_div(note.created,1000.))),
+                                ('updated', datetime.datetime.fromtimestamp(old_div(note.updated,1000.))),
                                 ('plus', j_(plus_tags)),
                                 ('context', j_(context_tags)),
                                 ('when', j_(when_tags)),
@@ -413,8 +421,8 @@ def projects_to_df(notes):
 
     df = DataFrame([dict([('title',note.title),
                             ('guid',note.guid),
-                            ('created', datetime.datetime.fromtimestamp(note.created/1000.)),
-                            ('updated', datetime.datetime.fromtimestamp(note.updated/1000.))
+                            ('created', datetime.datetime.fromtimestamp(old_div(note.created,1000.))),
+                            ('updated', datetime.datetime.fromtimestamp(old_div(note.updated,1000.)))
                             ]) for note in notes],
               columns=['title','guid','created','updated'])
 
@@ -448,14 +456,13 @@ def project_tags_for_selected():
     project_tags = set()
 
     for note in web_api_notes_from_selection():
-        project_tags |= set(filter(lambda s: s.startswith("+"), [tag(guid=g).name for g in note.tagGuids]))
+        project_tags |= set([s for s in [tag(guid=g).name for g in note.tagGuids] if s.startswith("+")])
 
     return project_tags
 
 def non_project_plus_tags():
 
-    all_plus_tags = set(filter(lambda tag_: tag_.startswith("+"),
-                       [tag_.name for tag_ in all_tags(refresh=False)]))
+    all_plus_tags = set([tag_ for tag_ in [tag_.name for tag_ in all_tags(refresh=False)] if tag_.startswith("+")])
 
     projects_notes = list(islice(notes_metadata(includeTitle=True,
                                   includeUpdated=True,
