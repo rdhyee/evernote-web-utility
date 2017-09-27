@@ -5,20 +5,6 @@ Wrapper for the Evernote Python SDK
 from __future__ import print_function
 from __future__ import division
 
-from past.utils import old_div
-from builtins import object
-__all__ = ["client", "userStore",  "user", "noteStore", "all_notebooks", "notes_metadata", "sizes_of_notes",
-           "all_tags", "tag", "tag_counts_by_name", "tags_by_guid", "init", "project_notes_and_tags",
-           "projects_to_df", "all_actions", "actions_to_df", "non_project_plus_tags",
-           'fix_wayward_plus_tags', 'action_note_tags', 'retire_project']
-
-from itertools import islice
-
-import logging
-logger = logging.getLogger(__name__)
-
-# https://github.com/evernote/evernote-sdk-python/blob/master/sample/client/EDAMTest.py
-
 import datetime
 from time import sleep
 import arrow
@@ -27,12 +13,27 @@ from evernote.api.client import EvernoteClient
 from evernote.edam.type.ttypes import Note
 from evernote.edam.notestore.ttypes import (NoteFilter,
                                             NotesMetadataResultSpec
-                                           )
+                                            )
 from evernote.edam.error.ttypes import (EDAMSystemException, EDAMErrorCode)
 
 from pandas import DataFrame
 from collections import defaultdict
 
+
+from past.utils import old_div
+from builtins import object
+__all__ = ["client", "userStore",  "user", "noteStore", "all_notebooks",
+           "notes_metadata", "sizes_of_notes",  "all_tags", "tag",
+           "tag_counts_by_name", "tags_by_guid", "init",
+           "project_notes_and_tags", "projects_to_df",
+           "all_actions", "actions_to_df", "non_project_plus_tags",
+           'fix_wayward_plus_tags', 'action_note_tags',
+           'retire_project']
+
+from itertools import islice
+
+import logging
+logger = logging.getLogger(__name__)
 
 
 def init(auth_token, sandbox=False):
@@ -41,7 +42,8 @@ def init(auth_token, sandbox=False):
     """
     global _client, client, userStore, noteStore, user
     global _notebooks, _notebook_name_dict, _notebook_guid_dict
-    global _tags, _tag_counts, _tags_by_name, _tags_by_guid, _tag_counts_by_name
+    global _tags, _tag_counts, _tags_by_name
+    global _tags_by_guid, _tag_counts_by_name
     global _when_tags, _when_tags_guids
 
     _client = EvernoteClient(token=auth_token, sandbox=sandbox)
@@ -62,7 +64,8 @@ def init(auth_token, sandbox=False):
     _tags_by_guid = None
     _tag_counts_by_name = None
 
-    _when_tags = [t for t in all_tags() if t.parentGuid == tag(name=".When").guid]
+    _when_tags = [t for t in all_tags() if t.parentGuid ==
+                  tag(name=".When").guid]
     _when_tags_guids = set([t.guid for t in _when_tags])
 
 
@@ -77,7 +80,8 @@ def evernote_wait_try_again(f):
             return f(*args, **kwargs)
         except EDAMSystemException as e:
             if e.errorCode == EDAMErrorCode.RATE_LIMIT_REACHED:
-                logger.info( "rate limit: {0} s. wait".format(e.rateLimitDuration))
+                logger.info("rate limit: {0} s. wait".format(
+                    e.rateLimitDuration))
                 sleep(e.rateLimitDuration)
                 logger("wait over")
                 return f(*args, **kwargs)
@@ -87,14 +91,18 @@ def evernote_wait_try_again(f):
 
     return f2
 
+
 class RateLimitingEvernoteProxy(object):
     # based on http://code.activestate.com/recipes/496741-object-proxying/
     __slots__ = ["_obj"]
+
     def __init__(self, obj):
         object.__setattr__(self, "_obj", obj)
 
     def __getattribute__(self, name):
-        return evernote_wait_try_again(getattr(object.__getattribute__(self, "_obj"), name))
+        return evernote_wait_try_again(
+            getattr(object.__getattribute__(self, "_obj"), name))
+
 
 def all_notebooks(refresh=False):
     # List all of the notebooks in the user's account
@@ -107,12 +115,13 @@ def all_notebooks(refresh=False):
         _notebook_name_dict = dict([(nb.name, nb) for nb in _notebooks])
     return _notebooks
 
+
 def notebook(name=None, guid=None, refresh=False):
 
     global _notebooks, _notebook_guid_dict, _notebook_name_dict
 
     if _notebooks is None or refresh:
-        nb = all_notebooks(refresh)
+        all_notebooks(refresh)
 
     if name is not None:
         return _notebook_name_dict.get(name)
@@ -121,9 +130,11 @@ def notebook(name=None, guid=None, refresh=False):
     else:
         return None
 
+
 def all_tags(refresh=False):
 
-    global _tags, _tag_counts, _tags_by_name, _tags_by_guid, _tag_counts_by_name, _tag_counts
+    global _tags, _tag_counts, _tags_by_name, _tags_by_guid
+    global _tag_counts_by_name, _tag_counts
 
     if _tags is None or refresh:
         _tags = noteStore.listTags()
@@ -132,14 +143,16 @@ def all_tags(refresh=False):
         _tags_by_name = dict([(tag.name, tag) for tag in _tags])
         _tags_by_guid = dict([(tag.guid, tag) for tag in _tags])
 
-        _tag_counts_by_name = dict([(_tags_by_guid[guid].name, count) for (guid, count) in list(_tag_counts.tagCounts.items())])
+        _tag_counts_by_name = dict([(_tags_by_guid[guid].name, count) for (
+            guid, count) in list(_tag_counts.tagCounts.items())])
 
     return _tags
 
-def tag (name=None, guid=None, refresh=False):
+
+def tag(name=None, guid=None, refresh=False):
 
     if _tags is None or refresh:
-        tags = all_tags(refresh)
+        all_tags(refresh)
 
     # add count if available
     if name is not None:
@@ -155,24 +168,28 @@ def tag (name=None, guid=None, refresh=False):
     else:
         return None
 
+
 def tag_counts_by_name(refresh=False):
 
     if _tags is None or refresh:
-        tags = all_tags(refresh)
+        all_tags(refresh)
 
     return _tag_counts_by_name
+
 
 def tags_by_guid(refresh=False):
 
     if _tags is None or refresh:
-        tags = all_tags(refresh)
+        all_tags(refresh)
 
     return _tags_by_guid
+
 
 def display_notebooks():
     notebooks = all_notebooks()
     for (i, notebook) in enumerate(notebooks):
         print(i, notebook.name, notebook.guid)
+
 
 def notebookcounts():
     """ return a dict of notebook guid -> number of notes in notebook"""
@@ -180,6 +197,7 @@ def notebookcounts():
 
     counts = noteStore.findNoteCounts(NoteFilter(), False)
     return counts.notebookCounts
+
 
 def notes_metadata(**input_kw):
     """ """
@@ -193,43 +211,49 @@ def notes_metadata(**input_kw):
     # http://dev.evernote.com/documentation/reference/NoteStore.html#Struct_NotesMetadataResultSpec
 
     include_kw = {
-        'includeTitle':False,
-        'includeContentLength':False,
-        'includeCreated':False,
-        'includeUpdated':False,
-        'includeDeleted':False,
-        'includeUpdateSequenceNum':False,
-        'includeNotebookGuid':False,
-        'includeTagGuids':False,
-        'includeAttributes':False,
-        'includeLargestResourceMime':False,
-        'includeLargestResourceSize':False
+        'includeTitle': False,
+        'includeContentLength': False,
+        'includeCreated': False,
+        'includeUpdated': False,
+        'includeDeleted': False,
+        'includeUpdateSequenceNum': False,
+        'includeNotebookGuid': False,
+        'includeTagGuids': False,
+        'includeAttributes': False,
+        'includeLargestResourceMime': False,
+        'includeLargestResourceSize': False
     }
 
-    include_kw.update([(k, input_kw[k]) for k in set(input_kw.keys()) & set(include_kw.keys())])
+    include_kw.update([(k, input_kw[k])
+                       for k in set(input_kw.keys()) & set(include_kw.keys())])
 
     # keywords aimed at NoteFilter
     # http://dev.evernote.com/documentation/reference/NoteStore.html#Struct_NoteFilter
-    filter_kw_list = ('order', 'ascending', 'words', 'notebookGuid', 'tagGuids', 'timeZone', 'inactive', 'emphasized')
-    filter_kw = dict([(k, input_kw[k]) for k in set(filter_kw_list) & set(input_kw.keys())])
+    filter_kw_list = ('order', 'ascending', 'words', 'notebookGuid',
+                      'tagGuids', 'timeZone', 'inactive', 'emphasized')
+    filter_kw = dict([(k, input_kw[k])
+                      for k in set(filter_kw_list) & set(input_kw.keys())])
 
     # what possible parameters are aimed at NoteFilter
-    #order	i32		optional
-    #ascending	bool		optional
-    #words	string		optional
-    #notebookGuid	Types.Guid		optional
-    #tagGuids	list<Types.Guid>		optional
-    #timeZone	string		optional
-    #inactive   bool
-    #emphasized string
+    # order i32     optional
+    # ascending bool        optional
+    # words string      optional
+    # notebookGuid  Types.Guid      optional
+    # tagGuids  list<Types.Guid>        optional
+    # timeZone  string      optional
+    # inactive   bool
+    # emphasized string
 
     more_nm = True
 
     while more_nm:
 
         # grab a page of data
-        note_meta = noteStore.findNotesMetadata(NoteFilter(**filter_kw), offset, page_size,
-                                    NotesMetadataResultSpec(**include_kw))
+        note_meta = (noteStore.
+                     findNotesMetadata(
+                         NoteFilter(**filter_kw),
+                         offset, page_size,
+                         NotesMetadataResultSpec(**include_kw)))
 
         # yield each individually
         for nm in note_meta.notes:
@@ -241,9 +265,12 @@ def notes_metadata(**input_kw):
         else:
             more_nm = False
 
+
 def sizes_of_notes():
     """a generator for note sizes"""
-    return (nm.contentLength for nm in notes_metadata(includeContentLength=True))
+    return (nm.contentLength
+            for nm in notes_metadata(includeContentLength=True))
+
 
 def notes(title=None):
     return notes_metadata(includeTitle=True,
@@ -251,15 +278,17 @@ def notes(title=None):
                           includeUpdateSequenceNum=True,
                           words='intitle:"{0}"'.format(title))
 
+
 def get_note(guid,
-            withContent=False,
-            withResourcesData=False,
-            withResourcesRecognition=False,
-            withResourcesAlternateData=False):
+             withContent=False,
+             withResourcesData=False,
+             withResourcesRecognition=False,
+             withResourcesAlternateData=False):
 
     # https://dev.evernote.com/doc/reference/NoteStore.html#Fn_NoteStore_getNote
     return noteStore.getNote(guid, withContent, withResourcesData,
-                                 withResourcesRecognition, withResourcesAlternateData)
+                             withResourcesRecognition,
+                             withResourcesAlternateData)
 
 
 def create_note(title, content, tagNames=None, notebookGuid=None):
@@ -267,11 +296,14 @@ def create_note(title, content, tagNames=None, notebookGuid=None):
     # put the note into the :INBOX notebook by default
     inbox_nb_guid = notebook(name=':INBOX').guid
 
-    note_template = u"""<?xml version="1.0" encoding="UTF-8" standalone="no"?>
-    <!DOCTYPE en-note SYSTEM "http://xml.evernote.com/pub/enml2.dtd">
-    <en-note style="word-wrap: break-word; -webkit-nbsp-mode: space; -webkit-line-break: after-white-space;">
-    {0}
-    </en-note>"""
+    note_template = u"""
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE en-note SYSTEM "http://xml.evernote.com/pub/enml2.dtd">
+<en-note style="word-wrap: break-word; -webkit-nbsp-mode: space;
+-webkit-line-break: after-white-space;">
+{0}
+</en-note>
+""".strip()
 
     note = Note()
 
@@ -291,36 +323,57 @@ def create_note(title, content, tagNames=None, notebookGuid=None):
     return note
 
 
-def update_note(note, title=None, content=None, tagNames=None, notebookGuid=None,
-                    updated=None):
-    
+def note_link(guid):
     """
-    With the exception of the note's title and guid, fields that are not being changed 
-    do not need to be set. If the content is not being modified, note.content should be 
-    left unset. If the list of resources is not being modified, note.resources 
+    return for note with guid:
+    https://[service]/shard/[shardId]/nl/[userId]/[noteGuid]/
+    """
+
+    global user
+
+    note = get_note(guid)
+
+    return ("https://{service}/shard/{shardId}/nl/{userId}/{noteGuid}/".format(
+        service="www.evernote.com",
+        shardId=user.shardId,
+        userId=user.id,
+        noteGuid=note.guid
+    ))
+
+
+def update_note(note, title=None, content=None, tagNames=None,
+                notebookGuid=None, updated=None):
+    """
+    With the exception of the note's title and guid, fields that
+    are not being changed do not need to be set. If the content
+    is not being modified, note.content should be left unset. If
+    the list of resources is not being modified, note.resources
     should be left unset.
     """
 
-    note_template = u"""<?xml version="1.0" encoding="UTF-8" standalone="no"?>
-    <!DOCTYPE en-note SYSTEM "http://xml.evernote.com/pub/enml2.dtd">
-    <en-note style="word-wrap: break-word; -webkit-nbsp-mode: space; -webkit-line-break: after-white-space;">
-    {0}
-    </en-note>"""
+    note_template = u"""
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE en-note SYSTEM "http://xml.evernote.com/pub/enml2.dtd">
+<en-note style="word-wrap: break-word; -webkit-nbsp-mode: space;
+-webkit-line-break: after-white-space;">
+{0}
+</en-note>
+""".strip()
 
     if title is not None:
         note.title = title.encode('utf-8')
-    
+
     if content is not None:
         note.content = note_template.format(content).encode('utf-8')
-        
+
     if tagNames is not None:
         note.tagNames = tagNames
 
     if notebookGuid is not None:
         note.notebookGuid = notebookGuid
-        
+
     if updated is None:
-        note.updated = arrow.utcnow().timestamp*1000
+        note.updated = arrow.utcnow().timestamp * 1000
 
     note = noteStore.updateNote(note)
     return note
@@ -336,19 +389,25 @@ def set_notebook_for_note(note, notebook_name):
         noteStore.updateNote(note)
     return note
 
+
 def web_api_notes_from_selection():
     from appscript import app
     evnote = app('Evernote')
-    return [get_note(sel_note.note_link().split("/")[-3]) for sel_note in evnote.selection()]
+    return [get_note(sel_note.note_link().split("/")[-3])
+            for sel_note in evnote.selection()]
+
 
 def all_actions():
-    actions = list(islice(notes_metadata(includeTitle=True,
-                                  includeUpdated=True,
-                                  includeCreated=True,
-                                  includeUpdateSequenceNum=True,
-                                  includeTagGuids=True,
-                                  notebookGuid=notebook(name='Action Pending').guid), None))
+    actions = list(islice(
+        notes_metadata(includeTitle=True,
+                       includeUpdated=True,
+                       includeCreated=True,
+                       includeUpdateSequenceNum=True,
+                       includeTagGuids=True,
+                       notebookGuid=notebook(name='Action Pending').guid),
+        None))
     return actions
+
 
 def actions_to_df(actions):
 
@@ -358,42 +417,48 @@ def actions_to_df(actions):
     actions_data = []
 
     for note in actions:
-        tags = [tag(guid=tagGuid).name for tagGuid in note.tagGuids] if note.tagGuids is not None else []
+        tags = [tag(
+            guid=tagGuid).name
+            for tagGuid in note.tagGuids] if note.tagGuids is not None else []
         plus_tags = [tag_ for tag_ in tags if tag_.startswith("+")]
         context_tags = [tag_ for tag_ in tags if tag_.startswith("@")]
         when_tags = [tag_ for tag_ in tags if tag_.startswith("#")]
         other_tags = [tag_ for tag_ in tags if tag_[0] not in ['+', '@', '#']]
 
-
-        actions_data.append(dict([('title',note.title),
-                                ('guid',note.guid),
-                                ('created', datetime.datetime.fromtimestamp(old_div(note.created,1000.))),
-                                ('updated', datetime.datetime.fromtimestamp(old_div(note.updated,1000.))),
-                                ('plus', j_(plus_tags)),
-                                ('context', j_(context_tags)),
-                                ('when', j_(when_tags)),
-                                ('other', j_(other_tags))
-                                ])
-        )
+        actions_data.append(dict([('title', note.title),
+                                  ('guid', note.guid),
+                                  ('created', datetime.datetime.fromtimestamp(
+                                      old_div(note.created, 1000.))),
+                                  ('updated', datetime.datetime.fromtimestamp(
+                                      old_div(note.updated, 1000.))),
+                                  ('plus', j_(plus_tags)),
+                                  ('context', j_(context_tags)),
+                                  ('when', j_(when_tags)),
+                                  ('other', j_(other_tags))
+                                  ])
+                            )
 
     actions_df = DataFrame(actions_data,
-                  columns=['title','guid','created','updated','plus', 'context', 'when', 'other'])
+                           columns=['title', 'guid', 'created', 'updated',
+                                    'plus', 'context', 'when', 'other'])
 
     return actions_df
+
 
 def actions_for_project(tag_name,
                         includeTitle=True,
                         includeUpdated=True,
                         includeUpdateSequenceNum=True,
-                        includeTagGuids=True ):
+                        includeTagGuids=True):
 
     notes = notes_metadata(includeTitle=includeTitle,
-                                  includeUpdated=includeUpdated,
-                                  includeUpdateSequenceNum=includeUpdateSequenceNum,
-                                  includeTagGuids=includeTagGuids,
-                                  tagGuids = [tag(tag_name).guid],
-                                  notebookGuid=notebook(name='Action Pending').guid)
+                           includeUpdated=includeUpdated,
+                           includeUpdateSequenceNum=includeUpdateSequenceNum,
+                           includeTagGuids=includeTagGuids,
+                           tagGuids=[tag(tag_name).guid],
+                           notebookGuid=notebook(name='Action Pending').guid)
     return notes
+
 
 def strip_when_tags(note):
     """
@@ -403,6 +468,7 @@ def strip_when_tags(note):
     note.tagGuids = list(guids_new_tag_set)
     noteStore.updateNote(note)
     return note
+
 
 def strip_when_tags_move_to_ref_nb_for_selection():
 
@@ -417,57 +483,73 @@ def strip_when_tags_move_to_ref_nb_for_selection():
 
     evnote.synchronize()
 
+
 def projects_to_df(notes):
 
-    df = DataFrame([dict([('title',note.title),
-                            ('guid',note.guid),
-                            ('created', datetime.datetime.fromtimestamp(old_div(note.created,1000.))),
-                            ('updated', datetime.datetime.fromtimestamp(old_div(note.updated,1000.)))
-                            ]) for note in notes],
-              columns=['title','guid','created','updated'])
+    df = DataFrame([dict([('title', note.title),
+                          ('guid', note.guid),
+                          ('created', datetime.datetime.fromtimestamp(
+                              old_div(note.created, 1000.))),
+                          ('updated', datetime.datetime.fromtimestamp(
+                              old_div(note.updated, 1000.)))
+                          ]) for note in notes],
+                   columns=['title', 'guid', 'created', 'updated'])
 
     return df
+
 
 def project_notes_and_tags():
     """
     get all the notes in the :PROJECTS Notebook
     """
 
-    notes = list(islice(notes_metadata(includeTitle=True,
-                                  includeUpdated=True,
-                                  includeCreated=True,
-                                  includeUpdateSequenceNum=True,
-                                  includeTagGuids=True,
-                                  notebookGuid=notebook(name=':PROJECTS').guid), None))
+    notes = list(islice(
+        notes_metadata(includeTitle=True,
+                       includeUpdated=True,
+                       includeCreated=True,
+                       includeUpdateSequenceNum=True,
+                       includeTagGuids=True,
+                       notebookGuid=notebook(name=':PROJECTS').guid),
+        None))
 
-    # accumulate all the tags that begin with "+" associated with notes in :PROJECTS notebook
+    # accumulate all the tags that begin with "+" associated with notes in
+    # :PROJECTS notebook
     plus_tags_set = set()
 
     for note in notes:
-        tags = [tag(guid=tagGuid).name for tagGuid in note.tagGuids] if note.tagGuids is not None else []
+        tags = ([tag(
+            guid=tagGuid).name for tagGuid in note.tagGuids]
+            if note.tagGuids is not None
+            else [])
         plus_tags = [tag_ for tag_ in tags if tag_.startswith("+")]
 
         plus_tags_set.update(plus_tags)
 
     return (notes, plus_tags_set)
 
+
 def project_tags_for_selected():
 
     project_tags = set()
 
     for note in web_api_notes_from_selection():
-        project_tags |= set([s for s in [tag(guid=g).name for g in note.tagGuids] if s.startswith("+")])
+        project_tags |= set(
+            [s for s in [tag(guid=g).name
+                         for g in note.tagGuids] if s.startswith("+")])
 
     return project_tags
 
+
 def non_project_plus_tags():
 
-    all_plus_tags = set([tag_ for tag_ in [tag_.name for tag_ in all_tags(refresh=False)] if tag_.startswith("+")])
+    all_plus_tags = set([tag_ for tag_ in [tag_.name for tag_ in all_tags(
+        refresh=False)] if tag_.startswith("+")])
 
-    projects_notes = list(islice(notes_metadata(includeTitle=True,
-                                  includeUpdated=True,
-                                  includeUpdateSequenceNum=True,
-                                  notebookGuid=notebook(name=':PROJECTS').guid), None))
+    projects_notes = list(islice(
+        notes_metadata(includeTitle=True,
+                       includeUpdated=True,
+                       includeUpdateSequenceNum=True,
+                       notebookGuid=notebook(name=':PROJECTS').guid), None))
 
     project_plus_tags = set()
     for note in projects_notes:
@@ -475,8 +557,8 @@ def non_project_plus_tags():
         plus_tags = [tag_ for tag_ in tags if tag_.startswith("+")]
         project_plus_tags.update(plus_tags)
 
-
     return (all_plus_tags - project_plus_tags)
+
 
 def generate_project_starter_notes():
 
@@ -487,35 +569,43 @@ def generate_project_starter_notes():
     for tag_name in non_project_plus_tags():
         proj_name = tag_name[1:]
         note = create_note(proj_name, " ", tagNames=[tag_name],
-                               notebookGuid=projects_nb_guid)
+                           notebookGuid=projects_nb_guid)
         notes.append(note)
 
     return notes
 
+
 def fix_wayward_plus_tags():
 
     active_projects_tag = tag(name=".Active Projects")
-    inactive_projects_tag = tag(name=".Inactive Projects")
+    # inactive_projects_tag = tag(name=".Inactive Projects")
 
-    wayward_plus_tags = [tag_ for tag_ in all_tags(refresh=True) if tag_.name.startswith("+") and tag_.parentGuid != active_projects_tag.guid]
+    wayward_plus_tags = [tag_ for tag_ in all_tags(refresh=True)
+                         if tag_.name.startswith("+") and
+                         tag_.parentGuid != active_projects_tag.guid]
     for tag_ in wayward_plus_tags:
         tag_.parentGuid = active_projects_tag.guid
         noteStore.updateTag(tag_)
 
     return [tag_.name for tag_ in wayward_plus_tags]
 
+
 def action_note_tags():
 
-    when_tags = [tag_ for tag_ in all_tags(refresh=True) if tag_.parentGuid == tag(name=".When").guid]
-    when_tags_guids = set([tag_.guid for tag_ in when_tags])
+    # when_tags = [tag_ for tag_ in all_tags(
+    #     refresh=True)
+    #    if tag_.parentGuid == tag(name=".When").guid]
+    # when_tags_guids = set([tag_.guid for tag_ in when_tags])
 
     note_tags_dict = defaultdict(list)
 
-    action_notes = list(islice(notes_metadata(includeTitle=True,
-                                      includeUpdated=True,
-                                      includeUpdateSequenceNum=True,
-                                      includeTagGuids=True,
-                                      notebookGuid=notebook(name='Action Pending').guid), None))
+    action_notes = list(islice(
+        notes_metadata(includeTitle=True,
+                       includeUpdated=True,
+                       includeUpdateSequenceNum=True,
+                       includeTagGuids=True,
+                       notebookGuid=notebook(name='Action Pending').guid),
+        None))
 
     # tags that have no .When tags whatsover
     # ideally -- each action has one and only one .When tag
@@ -533,13 +623,13 @@ def action_note_tags():
         if len(tag_guids) == 0:
             note_tags_dict['__UNTAGGED__'].append(note)
 
-
     return note_tags_dict
 
+
 def retire_project(tag_name,
-    ignore_actions=False,
-    dry_run=False,
-    display_remaining_actions=True):
+                   ignore_actions=False,
+                   dry_run=False,
+                   display_remaining_actions=True):
     """
     Retire the project represented by tag_name
     """
@@ -549,21 +639,27 @@ def retire_project(tag_name,
     if not tag_name.startswith("+"):
         return tag_
 
-    # if ignore_actions is False, check whether are still associated actions for the project.
-    # if there are actions, then don't retire project.  Optionally display actions in Evernote
+    # if ignore_actions is False, check whether are still associated
+    # actions for the project.
+    # if there are actions, then don't retire project.
+    # Optionally display actions in Evernote
+
     if not ignore_actions:
         associated_actions = list(actions_for_project(tag_name))
         if len(associated_actions):
             if display_remaining_actions:
                 from appscript import app
                 evnote = app('Evernote')
-                evnote.open_collection_window(with_query_string = '''notebook:"Action Pending" tag:"{0}"'''.format(tag_name))
+                evnote.open_collection_window(
+                    with_query_string='''notebook:"Action Pending" tag:"{0}"'''
+                    .format(tag_name))
 
             return tag_name
 
-
-    # before just trying to turn the + to a -, check for existence of the new name.
-    # if the new name exists, we would delete the + tag and apply the - tag to the notes tied to the
+    # before just trying to turn the + to a -, check
+    # for existence of the new name.
+    # if the new name exists, we would delete the + tag and apply
+    # the - tag to the notes tied to the
     # + tag
 
     # let's take care of the simple case first
@@ -581,11 +677,14 @@ def retire_project(tag_name,
     # change parent reference
     tag_.parentGuid = tag('.Inactive Projects').guid
 
-    # move the project note (if it exists) from the project notebook to the retired project notebook
+    # move the project note (if it exists) from the project notebook
+    # to the retired project notebook
 
-    project_notes = notes_metadata(includeTitle=True, includeNotebookGuid=True,
-                            tagGuids = [tag_.guid],
-                            notebookGuid=notebook(name=':PROJECTS').guid)
+    project_notes = notes_metadata(
+        includeTitle=True,
+        includeNotebookGuid=True,
+        tagGuids=[tag_.guid],
+        notebookGuid=notebook(name=':PROJECTS').guid)
 
     # with NoteMetadata, how to make change to the corresponding note?
     # make use of
