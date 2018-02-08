@@ -700,3 +700,4 @@ def retire_project(tag_name,
     noteStore.updateTag(tag_)
 
     return tag_
+
