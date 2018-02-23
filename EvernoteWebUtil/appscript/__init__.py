@@ -40,6 +40,14 @@ on touch_mod_date(note_link)
     return note_
 
 end touch_mod_date
+
+on assign_tag_parent(tag_name, parent_tag_name)
+    tell application "Evernote"
+        set tag_ to tag tag_name
+        set tag_'s parent to tag parent_tag_name
+    end tell
+    return tag_
+end assign_tag_parent
 """
 
 
@@ -84,4 +92,6 @@ class EvernoteASWrapper(object):
         return self.scpt.call('unassign_note_tag', note_link, tag_name)
     def touch_mod_date(self, note_link):
         return self.scpt.call('touch_mod_date', note_link)
+    def assign_tag_parent(self, tag_name, parent_tag_name):
+        return self.scpt.call('assign_tag_parent', tag_name, parent_tag_name)
     
