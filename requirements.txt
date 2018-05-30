@@ -1,1 +1,2 @@
 evernote==1.25.0
+appscript==1.0.1

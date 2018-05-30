@@ -9,6 +9,9 @@ import datetime
 from time import sleep
 import arrow
 
+from itertools import islice
+import logging
+
 from evernote.api.client import EvernoteClient
 from evernote.edam.type.ttypes import Note
 from evernote.edam.notestore.ttypes import (NoteFilter,
@@ -30,9 +33,7 @@ __all__ = ["client", "userStore",  "user", "noteStore", "all_notebooks",
            'fix_wayward_plus_tags', 'action_note_tags',
            'retire_project']
 
-from itertools import islice
 
-import logging
 logger = logging.getLogger(__name__)
 
 
@@ -700,4 +701,3 @@ def retire_project(tag_name,
     noteStore.updateTag(tag_)
 
     return tag_
-
