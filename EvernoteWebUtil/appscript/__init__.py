@@ -32,14 +32,12 @@ on unassign_note_tag(note_link, tag_name)
 end unassign_note_tag
 
 on touch_mod_date(note_link)
-
    tell application "Evernote"
         set note_ to find note note_link
         set modification date of note_ to current date
     end tell
 
     return note_
-
 end touch_mod_date
 
 on assign_tag_parent(tag_name, parent_tag_name)
@@ -49,6 +47,13 @@ on assign_tag_parent(tag_name, parent_tag_name)
     end tell
     return tag_
 end assign_tag_parent
+
+on rename_tag(from_name, to_name)
+    tell application "Evernote"
+        set tag_ to tag from_name
+        set name of tag_ to to_name
+    end tell
+end rename_tag
 """
 
 
@@ -144,6 +149,9 @@ class EvernoteASWrapper(object):
 
     def assign_tag_parent(self, tag_name, parent_tag_name):
         return self.scpt.call('assign_tag_parent', tag_name, parent_tag_name)
+
+    def rename_tag(self, from_name, to_name):
+        return self.scpt.call('rename_tag', from_name, to_name)
 
     def display_notes(self, notes):
         for note in notes:
