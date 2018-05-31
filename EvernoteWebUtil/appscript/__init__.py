@@ -170,6 +170,52 @@ class EvernoteGTDWrapper(EvernoteASWrapper):
                 if tag.name() in when_tags:
                     self.unassign_note_tag(note.note_link(), tag.name())
 
+    def retire_project(self, tag_name):
+
+        # look for the project note corresponding to tag_name
+        # there should be one and only one such note
+
+        q = """notebook::PROJECTS tag:"{}" """.format(tag_name)
+        results = self.evnote.find_notes(q)
+
+        if len(results) == 1:
+            project_note = self.evnote.find_notes(q)[0]
+
+            # move the project note to :PROJECTS--RETIRED notebook
+            self.evnote.move(
+                project_note,
+                to=self.evnote.notebooks[':PROJECTS--RETIRED'])
+
+            # retire the actions for the project
+            q = """notebook:"Action Pending" tag:"{}" """.format(tag_name)
+            results = self.evnote.find_notes(q)
+            self.retire_action(results)
+
+            # now rename project tag
+            neg_tag = tag_name.replace('+', '-', 1)
+            self.rename_tag(tag_name, neg_tag)
+
+            # move the tag to be a child of inactive projects
+            self.assign_tag_parent(neg_tag, ".Inactive Projects")
+
+    def retire_selection(self, destination='Completed'):
+        """
+        if a selected note is a project one, retire it and associated actions
+        otherwise, just retire action note
+        """
+
+        sel = self.evnote.selection()
+
+        for note in sel:
+            note_info = project_info(note)
+
+            # check to see whether a given selected note is a project note.
+            if note_info['is_project_note']:
+                plus_tag = note_info['plus_tags'][0]
+                self.retire_project(plus_tag)
+            elif note_info['notebook_name'] == 'Action Pending':
+                self.retire_action([note], destination=destination)
+
     def put_into_maybe(self, notes):
         for note in notes:
             # move to Action Pending
