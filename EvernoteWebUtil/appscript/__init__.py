@@ -1,6 +1,7 @@
 from appscript import app, k
 import applescript
 import datetime
+import json
 
 __all__ = ['EvernoteASWrapper', 'EvernoteGTDWrapper']
 
@@ -82,6 +83,10 @@ def project_info(note):
     }
 
 
+def monday_of_week(date_):
+    return date_ - datetime.timedelta(days=date_.weekday())
+
+
 class EvernoteASWrapper(object):
     def __init__(self):
         self.evnote = app('Evernote')
@@ -117,8 +122,8 @@ class EvernoteASWrapper(object):
 
     def create_text_note(self, notebook_name, title, text):
         return (self.evnote.create_note(
-                 with_text=text, title=title,
-                 notebook=app.notebooks[notebook_name]))
+            with_text=text, title=title,
+            notebook=app.notebooks[notebook_name]))
 
     def create_html_note(self, notebook_name, title, html):
         self.evnote.create_note(
@@ -155,7 +160,23 @@ class EvernoteASWrapper(object):
 
     def display_notes(self, notes):
         for note in notes:
-            print (note.title())
+            print(note.title())
+
+    def get_or_create_note(self, title, tag, notebook_name, text):
+        q = 'intitle:{} tag:{} notebook:{}'.format(
+            json.dumps(title),
+            json.dumps(tag),
+            json.dumps(notebook_name)
+        )
+        results = self.evnote.find_notes(q)
+        if len(results) == 1:
+            return results[0]
+        elif len(results) > 1:
+            raise Exception('Note title/tag/notebook is not unique')
+        else:
+            note_ = self.create_text_note(notebook_name, title, text)
+            self.assign_note_tag(note_.note_link(), tag)
+            return note_
 
 
 when_tags = ['#0-Daily', '#1-Now', '#2-Next', '#3-Soon',
@@ -232,3 +253,21 @@ class EvernoteGTDWrapper(EvernoteASWrapper):
             if note.reminder_order() != k.missing_value:
                 now = datetime.datetime.utcnow()
                 note.reminder_done_time.set(now)
+
+    def create_review_planning_notes(self, date_=None):
+        if date_ is None:
+            date_ = datetime.date.today()
+
+        # calculate the Monday of last week
+        this_monday = monday_of_week(date_)
+        last_monday = this_monday - datetime.timedelta(days=7)
+
+        weekly_plan_title = "Weekly Plan {}".format(
+            this_monday.strftime("%Y.%m.%d"))
+        weekly_review_title = "Weekly Review {}".format(
+            last_monday.strftime("%Y.%m.%d"))
+
+        return (self.get_or_create_note(weekly_plan_title,
+                                        'Weekly Plan', 'Planning', ' '),
+                self.get_or_create_note(weekly_review_title,
+                                        'Weekly Review', 'Review', ' '))
