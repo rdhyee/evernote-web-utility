@@ -162,12 +162,16 @@ class EvernoteASWrapper(object):
         for note in notes:
             print(note.title())
 
-    def get_or_create_note(self, title, tag, notebook_name, text):
-        q = 'intitle:{} tag:{} notebook:{}'.format(
+    def get_or_create_note(self, title, tag=None, notebook_name=":INBOX", text=" "):
+
+        q_tag = " tag:{} ".format(json.dumps(tag)) if tag is not None else ""
+
+        q = 'intitle:{} notebook:{}{}'.format(
             json.dumps(title),
-            json.dumps(tag),
-            json.dumps(notebook_name)
+            json.dumps(notebook_name),
+            q_tag
         )
+
         results = self.evnote.find_notes(q)
         if len(results) == 1:
             return results[0]
@@ -175,7 +179,8 @@ class EvernoteASWrapper(object):
             raise Exception('Note title/tag/notebook is not unique')
         else:
             note_ = self.create_text_note(notebook_name, title, text)
-            self.assign_note_tag(note_.note_link(), tag)
+            if tag is not None:
+                self.assign_note_tag(note_.note_link(), tag)
             return note_
 
 
