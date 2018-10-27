@@ -276,3 +276,16 @@ class EvernoteGTDWrapper(EvernoteASWrapper):
                                         'Weekly Plan', 'Planning', ' '),
                 self.get_or_create_note(weekly_review_title,
                                         'Weekly Review', 'Review', ' '))
+
+    def active_projects(self, sort_key='modified', reverse=True):
+        name = ':PROJECTS'
+
+        projects_info = []
+
+        for note in self.evnote.notebooks[name].notes():
+            projects_info.append(project_info(note))
+
+        # print them out by reverse last-modified
+
+        for proj in sorted(projects_info, key=lambda p: p[sort_key], reverse=reverse):
+            yield(proj)

@@ -1,4 +1,10 @@
 EvernoteWebUtil.egg-info/
+.ipynb_checkpoints/
 build/
 dist/
+*.log
 *.pyc
+.DS_Store
+.cache/
+.coverage
+notebooks/settings.py
