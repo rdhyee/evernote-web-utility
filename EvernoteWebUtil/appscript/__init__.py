@@ -55,6 +55,28 @@ on rename_tag(from_name, to_name)
         set name of tag_ to to_name
     end tell
 end rename_tag
+
+on every_tag()
+    tell application "Evernote"
+        set results to name of every tag
+        return results
+    end tell
+end every_tag
+
+on every_tag_with_parent()
+    tell application "Evernote"
+        set results to {}
+        repeat with tag_ in every tag
+            try
+                set pname to name of parent of tag_
+            on error errMsg
+                set pname to ""
+            end try
+            set end of results to {tname:name of tag_, pname:pname}
+        end repeat
+        return results
+    end tell
+end every_tag_with_parent
 """
 
 
@@ -182,6 +204,13 @@ class EvernoteASWrapper(object):
             if tag is not None:
                 self.assign_note_tag(note_.note_link(), tag)
             return note_
+
+    def every_tag(self):
+        return self.scpt.call('every_tag')
+
+    def every_tag_with_parent(self):
+        return self.scpt.call('every_tag_with_parent')
+
 
 
 when_tags = ['#0-Daily', '#1-Now', '#2-Next', '#3-Soon',
