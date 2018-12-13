@@ -318,3 +318,21 @@ class EvernoteGTDWrapper(EvernoteASWrapper):
 
         for proj in sorted(projects_info, key=lambda p: p[sort_key], reverse=reverse):
             yield(proj)
+
+    def generate_project_starter_notes(self):
+
+        projects_tags = set([p['plus_tags'][0] for p in self.active_projects()])
+
+        every_tag = self.every_tag_with_parent()
+        plus_tags = set([tag_['tname'] for tag_ in every_tag if tag_['tname'].startswith('+')])
+        notes = []
+
+        for tag_name in (plus_tags - projects_tags):
+            proj_name = tag_name[1:]
+            note = self.get_or_create_note(proj_name, tag=tag_name, notebook_name=":PROJECTS", text=" ")
+            # move the tag to be a child of active projects
+            self.assign_tag_parent(tag_name, ".Active Projects")
+
+            notes.append(note)
+
+        return notes
