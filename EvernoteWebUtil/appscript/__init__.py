@@ -186,9 +186,9 @@ class EvernoteASWrapper(object):
 
     def get_or_create_note(self, title, tag=None, notebook_name=":INBOX", text=" "):
 
-        q_tag = " tag:{} ".format(json.dumps(tag)) if tag is not None else ""
+        q_tag = ' tag:{} '.format(json.dumps(tag)) if tag is not None else ''
 
-        q = 'intitle:{} notebook:{}{}'.format(
+        q = 'intitle:{} notebook:{} {}'.format(
             json.dumps(title),
             json.dumps(notebook_name),
             q_tag
